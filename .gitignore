@@ -16,8 +16,7 @@ __pycache__/
 .vscode/
 
 # Logs
-*.log
-logs/
+logs/*.log
 
 # Local database files
 *.db
