@@ -4,9 +4,14 @@ import time
 import signal
 
 from src.utils.logger import get_logger
-
+from src.processing.data_processor import (
+    transform_trade,
+    validate_trade,
+    TradeAggregator
+)
 
 logger = get_logger("websocket", "websocket.log")
+aggregator = TradeAggregator()
 
 
 # -----------------------------
@@ -53,22 +58,33 @@ def on_open(ws):
 
 
 def on_message(ws, message):
-    combined_data = json.loads(message)
-    data = combined_data["data"]
+    try:
+        combined_data = json.loads(message)
+        data = combined_data["data"]
 
-    symbol = data["s"]
-    price = data["p"]
-    quantity = data["q"]
+        # Transform raw Binance data
+        trade = transform_trade(data)
 
-    trade_time = data["T"]
-    event_time = data["E"]
+        # Validate transformed data
+        if not validate_trade(trade):
+            logger.warning("Invalid trade received: %s", trade)
+            return
 
-    print(
-        f"{symbol} | Price: {price} | "
-        f"Quantity: {quantity} | "
-        f"Trade Time: {trade_time} | "
-        f"Event Time: {event_time}"
-    )
+        # Add trade to the appropriate minute bucket
+        completed_bucket = aggregator.add_trade(trade)
+
+        # A minute has been completed
+        if completed_bucket:
+            logger.info(
+                "Completed OHLCV: %s",
+                completed_bucket
+            )
+
+            print("COMPLETED:", completed_bucket)
+
+    except Exception:
+        logger.exception("Error processing WebSocket message")
+
 
 
 def on_error(ws, error):
