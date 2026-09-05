@@ -75,10 +75,10 @@ def on_message(ws, message):
             logger.warning("Invalid trade received: %s", trade)
             return
 
-        # Add trade to the appropriate minute bucket
+        # Add trade to the appropriate 10-second bucket
         completed_bucket = aggregator.add_trade(trade)
 
-        # A minute has been completed
+        # A 10-second bucket has been completed
         if completed_bucket:
             logger.info(
                 "Completed OHLCV: %s",

@@ -1,10 +1,12 @@
-def get_minute_bucket(timestamp):
+def get_10_second_bucket(timestamp):
     """
-    Convert a trade timestamp into its 1-minute bucket.
+    Convert a trade timestamp into its 10-second bucket.
     """
 
+    second = (timestamp.second // 10) * 10
+
     return timestamp.replace(
-        second=0,
+        second=second,
         microsecond=0
     )
 
@@ -16,15 +18,19 @@ class TradeAggregator:
 
     def add_trade(self, trade):
         """
-        Add a trade to its corresponding 1-minute OHLCV bucket.
+        Add a trade to its corresponding 10-second OHLCV bucket.
 
         Returns a completed bucket if the trade belongs
-        to a newer minute.
+        to a newer 10-second bucket.
         """
 
         symbol = trade["symbol"]
-        minute = get_minute_bucket(trade["trade_time"])
-        key = (symbol, minute)
+
+        bucket_time = get_10_second_bucket(
+            trade["trade_time"]
+        )
+
+        key = (symbol, bucket_time)
 
         completed_bucket = None
 
@@ -36,16 +42,18 @@ class TradeAggregator:
         ]
 
         if symbol_buckets:
-            previous_minute = max(
+
+            previous_bucket = max(
                 bucket_key[1]
                 for bucket_key in symbol_buckets
             )
 
-            # A new minute has started
-            if minute > previous_minute:
+            # A new 10-second bucket has started
+            if bucket_time > previous_bucket:
+
                 completed_bucket = self.finalize_bucket(
                     symbol,
-                    previous_minute
+                    previous_bucket
                 )
 
         # Create a new bucket
@@ -53,7 +61,7 @@ class TradeAggregator:
 
             self.buckets[key] = {
                 "symbol": symbol,
-                "minute": minute,
+                "bucket_start": bucket_time,
                 "open": trade["price"],
                 "high": trade["price"],
                 "low": trade["price"],
@@ -88,12 +96,12 @@ class TradeAggregator:
 
         return completed_bucket
 
-    def finalize_bucket(self, symbol, minute):
+    def finalize_bucket(self, symbol, bucket_time):
         """
         Remove and return a completed bucket.
         """
 
-        key = (symbol, minute)
+        key = (symbol, bucket_time)
 
         if key not in self.buckets:
             return None

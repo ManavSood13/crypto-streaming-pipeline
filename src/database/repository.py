@@ -6,13 +6,13 @@ logger = get_logger("database", "pipeline.log")
 
 def insert_ohlcv(connection, record):
     """
-    Insert a 1-minute OHLCV record into PostgreSQL.
+    Insert a 10-second OHLCV record into PostgreSQL.
     """
 
     query = """
-        INSERT INTO ohlcv_1m (
+        INSERT INTO ohlcv_10s (
             symbol,
-            minute,
+            bucket_start,
             open,
             high,
             low,
@@ -22,7 +22,7 @@ def insert_ohlcv(connection, record):
         )
         VALUES (
             %(symbol)s,
-            %(minute)s,
+            %(bucket_start)s,
             %(open)s,
             %(high)s,
             %(low)s,
@@ -30,7 +30,7 @@ def insert_ohlcv(connection, record):
             %(volume)s,
             %(trade_count)s
         )
-        ON CONFLICT (symbol, minute)
+        ON CONFLICT (symbol, bucket_start)
         DO NOTHING
     """
 
@@ -43,7 +43,7 @@ def insert_ohlcv(connection, record):
         logger.info(
             "Inserted OHLCV record: %s %s",
             record["symbol"],
-            record["minute"]
+            record["bucket_start"]
         )
 
     except Exception:
