@@ -1,0 +1,118 @@
+/* ------------------------------------------------
+   MAIN PAGE
+------------------------------------------------ */
+
+.main {
+    background-color: #0e1117;
+}
+
+
+/* ------------------------------------------------
+   HEADINGS
+------------------------------------------------ */
+
+h1 {
+    font-size: 42px;
+    font-weight: 700;
+}
+
+h2 {
+    font-size: 28px;
+    margin-top: 30px;
+}
+
+h3 {
+    font-size: 22px;
+}
+
+
+/* ------------------------------------------------
+   LIVE STATUS
+------------------------------------------------ */
+
+.live-badge {
+    display: inline-block;
+    margin-top: 25px;
+    padding: 8px 18px;
+    border-radius: 20px;
+    background-color: #163d25;
+    color: #3fb950;
+    border: 1px solid #238636;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+
+/* ------------------------------------------------
+   METRIC CARDS
+------------------------------------------------ */
+
+[data-testid="stMetric"] {
+    background-color: #161b22;
+    border-radius: 14px;
+    padding: 20px;
+    min-height: 115px;
+    transition: 0.2s ease;
+}
+
+[data-testid="stMetric"]:hover {
+    transform: translateY(-10px);
+}
+
+[data-testid="stMetricLabel"] {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+[data-testid="stMetricValue"] {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+
+/* ------------------------------------------------
+   STATUS CARDS
+------------------------------------------------ */
+
+.status-card {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    padding: 18px 20px;
+    min-height: 90px;
+}
+
+.status-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.status-value {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+
+/* ------------------------------------------------
+   DATAFRAME
+------------------------------------------------ */
+
+[data-testid="stDataFrame"] {
+    border-radius: 12px;
+}
+
+
+/* ------------------------------------------------
+   FOOTER
+------------------------------------------------ */
+
+.dashboard-footer {
+    text-align: center;
+    color: #8b949e;
+    font-size: 13px;
+    padding: 35px 0 15px 0;
+    margin-top: 30px;
+    border-top: 1px solid #30363d;
+}
