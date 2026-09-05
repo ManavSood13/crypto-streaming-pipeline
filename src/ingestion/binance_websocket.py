@@ -1,22 +1,22 @@
+#modules import
 import websocket
 import json
 import time
 import signal
 
+#file imports
 from src.utils.logger import get_logger
-from src.processing.data_processor import (
-    transform_trade,
-    validate_trade,
-    TradeAggregator
-)
-from src.database.postgres import (
-    get_connection,
-    insert_ohlcv
-)
+from src.processing.transformer import transform_trade
+from src.processing.validator import validate_trade
+from src.processing.aggregator import TradeAggregator
+from src.database.connection import get_connection
+from src.database.repository import insert_ohlcv
 
-logger = get_logger("websocket", "websocket.log")
+#websocket and database setup
+logger = get_logger("binance_websocket", "pipeline.log")
 aggregator = TradeAggregator()
 db_connection = get_connection()
+
 
 # -----------------------------
 # Shutdown handling
@@ -141,7 +141,6 @@ url = f"wss://stream.binance.com:9443/stream?streams={streams}"
 try:
     while not shutdown_requested:
         try:
-            logger.info("Connecting to Binance WebSocket...")
             print("Connecting to Binance WebSocket 🥸 ...")
 
             current_ws = websocket.WebSocketApp(

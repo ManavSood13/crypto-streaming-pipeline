@@ -1,67 +1,8 @@
-from datetime import datetime, timezone
-
-from src.utils.logger import get_logger
-
-
-logger = get_logger("processor", "pipeline.log")
-
-
-def transform_trade(data):
-    """
-    Transform raw Binance trade data into a clean Python dictionary.
-    """
-    return {
-        "symbol": data["s"],
-        "price": float(data["p"]),
-        "quantity": float(data["q"]),
-        "trade_time": datetime.fromtimestamp(
-            data["T"] / 1000,
-            tz=timezone.utc
-        ),
-        "event_time": datetime.fromtimestamp(
-            data["E"] / 1000,
-            tz=timezone.utc
-        )
-    }
-
-
-def validate_trade(trade):
-    """
-    Validate a transformed trade.
-    """
-
-    if not trade["symbol"]:
-        logger.warning("Trade rejected: missing symbol")
-        return False
-
-    if trade["price"] <= 0:
-        logger.warning(
-            "Trade rejected: invalid price for %s",
-            trade["symbol"]
-        )
-        return False
-
-    if trade["quantity"] <= 0:
-        logger.warning(
-            "Trade rejected: invalid quantity for %s",
-            trade["symbol"]
-        )
-        return False
-
-    if trade["trade_time"] is None:
-        logger.warning(
-            "Trade rejected: missing trade time for %s",
-            trade["symbol"]
-        )
-        return False
-
-    return True
-
-
 def get_minute_bucket(timestamp):
     """
     Convert a trade timestamp into its 1-minute bucket.
     """
+
     return timestamp.replace(
         second=0,
         microsecond=0
@@ -83,7 +24,6 @@ class TradeAggregator:
 
         symbol = trade["symbol"]
         minute = get_minute_bucket(trade["trade_time"])
-
         key = (symbol, minute)
 
         completed_bucket = None
@@ -96,7 +36,6 @@ class TradeAggregator:
         ]
 
         if symbol_buckets:
-
             previous_minute = max(
                 bucket_key[1]
                 for bucket_key in symbol_buckets
@@ -104,7 +43,6 @@ class TradeAggregator:
 
             # A new minute has started
             if minute > previous_minute:
-
                 completed_bucket = self.finalize_bucket(
                     symbol,
                     previous_minute

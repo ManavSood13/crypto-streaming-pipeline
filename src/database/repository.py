@@ -1,30 +1,14 @@
-import psycopg
-
 from src.utils.logger import get_logger
+
 
 logger = get_logger("database", "pipeline.log")
 
 
-DB_CONFIG = {
-    "dbname": "crypto_pipeline",
-    "user": "manavsood",
-    "host": "localhost",
-    "port": 5432
-}
-
-
-def get_connection():
-    try:
-        connection = psycopg.connect(**DB_CONFIG)
-        logger.info("PostgreSQL connection established ✅ 🥳")
-        return connection
-
-    except Exception:
-        logger.exception("Failed to connect to PostgreSQL❌ 😭")
-        raise
-
-
 def insert_ohlcv(connection, record):
+    """
+    Insert a 1-minute OHLCV record into PostgreSQL.
+    """
+
     query = """
         INSERT INTO ohlcv_1m (
             symbol,
@@ -64,8 +48,10 @@ def insert_ohlcv(connection, record):
 
     except Exception:
         connection.rollback()
+
         logger.exception(
             "Failed to insert OHLCV record: %s",
             record
         )
+
         raise
