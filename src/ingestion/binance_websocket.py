@@ -9,10 +9,14 @@ from src.processing.data_processor import (
     validate_trade,
     TradeAggregator
 )
+from src.database.postgres import (
+    get_connection,
+    insert_ohlcv
+)
 
 logger = get_logger("websocket", "websocket.log")
 aggregator = TradeAggregator()
-
+db_connection = get_connection()
 
 # -----------------------------
 # Shutdown handling
@@ -25,10 +29,10 @@ current_ws = None
 def handle_shutdown(signum, frame):
     global shutdown_requested
 
-    logger.info("Shutdown requested by user")
-
     shutdown_requested = True
-
+    logger.info("🛑Shutdown requested by user")
+    print("\n🛑Shutdown requested. Stopping WebSocket ...")
+    
     if current_ws is not None:
         current_ws.close()
 
@@ -51,7 +55,8 @@ max_reconnect_delay = 30
 def on_open(ws):
     global reconnect_delay
 
-    logger.info("WebSocket connected")
+    logger.info("WebSocket connected 🤯")
+    print("WebSocket connected 🤯")
 
     # Reset reconnect delay after successful connection
     reconnect_delay = 1
@@ -80,7 +85,9 @@ def on_message(ws, message):
                 completed_bucket
             )
 
-            print("COMPLETED:", completed_bucket)
+            insert_ohlcv(db_connection, completed_bucket)
+
+            print("SAVED TO DATABASE:", completed_bucket)
 
     except Exception:
         logger.exception("Error processing WebSocket message")
@@ -130,52 +137,60 @@ url = f"wss://stream.binance.com:9443/stream?streams={streams}"
 # WebSocket connection loop
 # -----------------------------
 
-while not shutdown_requested:
 
-    try:
+try:
+    while not shutdown_requested:
+        try:
+            logger.info("Connecting to Binance WebSocket...")
+            print("Connecting to Binance WebSocket 🥸 ...")
 
-        logger.info("Connecting to Binance WebSocket")
+            current_ws = websocket.WebSocketApp(
+                url,
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
 
-        current_ws = websocket.WebSocketApp(
-            url,
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close
+            current_ws.run_forever(
+                ping_interval=20,
+                ping_timeout=10
+            )
+
+        except Exception:
+            logger.exception("Unexpected WebSocket failure")
+
+        finally:
+            current_ws = None
+
+        # Don't reconnect if user pressed Ctrl+C
+        if shutdown_requested:
+            break
+
+        logger.warning(
+            "Connection lost. Reconnecting in %s seconds...",
+            reconnect_delay
         )
 
-        current_ws.run_forever()
+        print(
+            f"Connection lost. Reconnecting in {reconnect_delay} seconds..."
+        )
 
-    except Exception:
-        logger.exception("Unexpected WebSocket failure")
+        try:
+            time.sleep(reconnect_delay)
+        except KeyboardInterrupt:
+            handle_shutdown(None, None)
+            break
 
-    finally:
-        current_ws = None
+        reconnect_delay = min(
+            reconnect_delay * 2,
+            max_reconnect_delay
+        )
 
+finally:
+    db_connection.close()
+    logger.info("PostgreSQL connection closed")
+    logger.info("WebSocket application stopped")
 
-    # Don't reconnect if user pressed Ctrl+C
-    if shutdown_requested:
-        break
-
-
-    logger.warning(
-        "Connection lost. Reconnecting in %s seconds...",
-        reconnect_delay
-    )
-
-
-    try:
-        time.sleep(reconnect_delay)
-
-    except KeyboardInterrupt:
-        handle_shutdown(None, None)
-        break
-
-
-    reconnect_delay = min(
-        reconnect_delay * 2,
-        max_reconnect_delay
-    )
-
-
-logger.info("WebSocket application stopped")
+    print("PostgreSQL connection closed")
+    print("WebSocket application stopped")
