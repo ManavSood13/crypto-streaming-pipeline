@@ -1,9 +1,24 @@
+from datetime import timedelta
+
+from src.utils.logger import get_logger
+
+
+logger = get_logger("aggregator", "pipeline.log")
+
+
+BUCKET_SECONDS = 10
+
+# How long to wait past the end of a bucket before assuming
+# no further trades will arrive for it.
+STALE_GRACE_SECONDS = 5
+
+
 def get_10_second_bucket(timestamp):
     """
     Convert a trade timestamp into its 10-second bucket.
     """
 
-    second = (timestamp.second // 10) * 10
+    second = (timestamp.second // BUCKET_SECONDS) * BUCKET_SECONDS
 
     return timestamp.replace(
         second=second,
@@ -12,16 +27,40 @@ def get_10_second_bucket(timestamp):
 
 
 class TradeAggregator:
+    """
+    Aggregate raw trades into fixed-width OHLCV buckets.
 
-    def __init__(self):
+    A bucket is completed, and returned for persistence, when any of
+    the following happens:
+
+    - a trade arrives for a newer bucket of the same symbol
+    - `flush_stale` decides the bucket can no longer receive trades
+    - `flush_all` is called during shutdown
+
+    Every method that can complete a bucket returns a *list*, because a
+    single event may close more than one bucket.
+    """
+
+    def __init__(self, bucket_seconds=BUCKET_SECONDS):
+        self.bucket_seconds = bucket_seconds
+
+        # (symbol, bucket_start) -> bucket
         self.buckets = {}
+
+        # symbol -> newest bucket_start seen so far
+        self.watermarks = {}
+
+        self.late_trades = 0
+
+    # -----------------------------
+    # Ingestion
+    # -----------------------------
 
     def add_trade(self, trade):
         """
-        Add a trade to its corresponding 10-second OHLCV bucket.
+        Add a trade to its corresponding OHLCV bucket.
 
-        Returns a completed bucket if the trade belongs
-        to a newer 10-second bucket.
+        Returns a list of completed buckets (possibly empty).
         """
 
         symbol = trade["symbol"]
@@ -31,33 +70,86 @@ class TradeAggregator:
         )
 
         key = (symbol, bucket_time)
+        watermark = self.watermarks.get(symbol)
 
-        completed_bucket = None
+        # The bucket this trade belongs to has already been persisted,
+        # so it can no longer be updated. Count it rather than silently
+        # creating a bucket that would never be flushed.
+        if (
+            key not in self.buckets
+            and watermark is not None
+            and bucket_time < watermark
+        ):
+            self.late_trades += 1
 
-        # Find the latest existing bucket for this symbol
-        symbol_buckets = [
-            bucket_key
-            for bucket_key in self.buckets
-            if bucket_key[0] == symbol
-        ]
-
-        if symbol_buckets:
-
-            previous_bucket = max(
-                bucket_key[1]
-                for bucket_key in symbol_buckets
+            logger.warning(
+                "Late trade discarded: %s %s (watermark %s)",
+                symbol,
+                bucket_time,
+                watermark
             )
 
-            # A new 10-second bucket has started
-            if bucket_time > previous_bucket:
+            return []
 
-                completed_bucket = self.finalize_bucket(
-                    symbol,
-                    previous_bucket
-                )
+        completed = []
 
-        # Create a new bucket
-        if key not in self.buckets:
+        # A newer bucket has started, so every older bucket for this
+        # symbol is now closed. Finalising *all* of them (not just the
+        # most recent) prevents out-of-order trades leaking buckets.
+        if watermark is None or bucket_time > watermark:
+            self.watermarks[symbol] = bucket_time
+            completed = self._finalize_before(symbol, bucket_time)
+
+        self._apply_trade(key, symbol, bucket_time, trade)
+
+        return completed
+
+    # -----------------------------
+    # Flushing
+    # -----------------------------
+
+    def flush_stale(self, now, grace_seconds=STALE_GRACE_SECONDS):
+        """
+        Complete buckets that can no longer receive trades.
+
+        A bucket is stale once its own time window has ended and the
+        grace period has passed. This is what rescues symbols that stop
+        trading: without it their final bucket is never written.
+        """
+
+        cutoff = now - timedelta(
+            seconds=self.bucket_seconds + grace_seconds
+        )
+
+        stale_keys = [
+            key
+            for key in self.buckets
+            if key[1] <= cutoff
+        ]
+
+        return self._pop_keys(stale_keys)
+
+    def flush_all(self):
+        """
+        Complete and return every open bucket.
+
+        Called on shutdown so in-flight buckets are persisted instead
+        of being discarded.
+        """
+
+        return self._pop_keys(
+            list(self.buckets)
+        )
+
+    # -----------------------------
+    # Internals
+    # -----------------------------
+
+    def _apply_trade(self, key, symbol, bucket_time, trade):
+
+        bucket = self.buckets.get(key)
+
+        if bucket is None:
 
             self.buckets[key] = {
                 "symbol": symbol,
@@ -70,40 +162,46 @@ class TradeAggregator:
                 "trade_count": 1
             }
 
-        # Update existing bucket
-        else:
+            return
 
-            bucket = self.buckets[key]
+        bucket["high"] = max(
+            bucket["high"],
+            trade["price"]
+        )
 
-            bucket["high"] = max(
-                bucket["high"],
-                trade["price"]
-            )
+        bucket["low"] = min(
+            bucket["low"],
+            trade["price"]
+        )
 
-            bucket["low"] = min(
-                bucket["low"],
-                trade["price"]
-            )
+        bucket["close"] = trade["price"]
 
-            bucket["close"] = trade["price"]
+        bucket["volume"] = round(
+            bucket["volume"] + trade["quantity"],
+            8
+        )
 
-            bucket["volume"] = round(
-                bucket["volume"] + trade["quantity"],
-                8
-            )
+        bucket["trade_count"] += 1
 
-            bucket["trade_count"] += 1
-
-        return completed_bucket
-
-    def finalize_bucket(self, symbol, bucket_time):
+    def _finalize_before(self, symbol, bucket_time):
         """
-        Remove and return a completed bucket.
+        Complete every open bucket for `symbol` older than `bucket_time`.
         """
 
-        key = (symbol, bucket_time)
+        keys = [
+            key
+            for key in self.buckets
+            if key[0] == symbol and key[1] < bucket_time
+        ]
 
-        if key not in self.buckets:
-            return None
+        return self._pop_keys(keys)
 
-        return self.buckets.pop(key)
+    def _pop_keys(self, keys):
+        """
+        Remove the given buckets and return them oldest-first.
+        """
+
+        return [
+            self.buckets.pop(key)
+            for key in sorted(keys, key=lambda item: (item[1], item[0]))
+        ]

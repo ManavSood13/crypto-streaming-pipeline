@@ -408,6 +408,10 @@ CREATE TABLE ohlcv_10s (
     trade_count INTEGER NOT NULL,
     PRIMARY KEY (symbol, bucket_start)
 );
+
+-- Supports the time-windowed dashboard aggregates.
+CREATE INDEX ohlcv_10s_bucket_start_idx
+    ON ohlcv_10s (bucket_start DESC);
 ```
 
 ### Why 10-Second Candles?
@@ -456,6 +460,24 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
+
+---
+
+### 3a. Configure the Database Connection (optional)
+
+Connection settings are read from the standard PostgreSQL environment
+variables, so no code changes are needed to run the project elsewhere:
+
+| Variable | Default |
+|---|---|
+| `PGDATABASE` | `crypto_pipeline` |
+| `PGUSER` | current OS user |
+| `PGHOST` | `localhost` |
+| `PGPORT` | `5432` |
+| `PGPASSWORD` | unset |
+
+Logging can be tuned with `LOG_LEVEL` (default `INFO`), `LOG_MAX_BYTES`
+and `LOG_BACKUP_COUNT`.
 
 ---
 
@@ -628,43 +650,50 @@ The logging system records events such as:
 - Database insert failures
 - Application shutdown
 
+Log files rotate at 5 MB and keep three backups, so a long running
+pipeline cannot fill the disk. Per-insert detail is logged at `DEBUG`
+level; set `LOG_LEVEL=DEBUG` to see it.
+
 Log files are excluded from Git using `.gitignore`.
 
 ---
 
 ## 🧪 Testing
 
-The project includes testing for important processing components.
+The project uses `pytest`. Run the suite from the project root:
 
-Tests cover areas such as:
+```bash
+pytest -q
+```
+
+Tests live in `tests/` and cover:
 
 ### Data Validation
 
-- Missing fields
-- Missing symbols
-- Invalid prices
-- Invalid quantities
-- Valid trades
+- Missing and `None` fields
+- Empty symbols
+- Invalid prices and quantities
+- Malformed payloads reaching the validator rather than raising
 
 ### OHLCV Aggregation
 
-- Open price
-- Highest price
-- Lowest price
-- Closing price
-- Volume
-- Trade count
-- 10-second bucket assignment
+- Open, high, low, close, volume and trade count
+- 10-second bucket assignment and microsecond truncation
+- Per-symbol isolation
 
-### Database Integrity
+### Regression Tests
 
-- Duplicate candle handling
-- Primary key constraints
-- Database insertion behavior
+These cover bugs that previously caused silent data loss:
 
-### WebSocket Reliability
+- In-flight buckets are flushed on shutdown
+- Buckets for symbols that stop trading are flushed once stale
+- Out-of-order trades are discarded instead of leaking buckets
+- Skipping ahead completes *every* open bucket, not just the newest
 
-The ingestion process was tested for connection failures and reconnection behavior.
+### Dashboard Safety
+
+- Lookups against an empty database return placeholders
+- `Decimal` columns are converted to `float64`
 
 ---
 

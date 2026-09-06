@@ -88,3 +88,15 @@ def price_history_dataframe(results):
     ]
 
     return pd.DataFrame(results, columns=columns)
+
+def hourly_volume_dataframe(results):
+    """
+    Convert hourly volume results into a Pandas DataFrame.
+    """
+
+    columns = [
+        "hour",
+        "total_volume"
+    ]
+
+    return pd.DataFrame(results, columns=columns)

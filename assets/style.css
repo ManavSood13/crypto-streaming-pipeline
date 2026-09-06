@@ -1,4 +1,25 @@
 /* ------------------------------------------------
+   FONT
+   Imported explicitly: naming Inter without loading it
+   silently fell back to the default sans-serif.
+------------------------------------------------ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+
+/* A universal reset zeroes the padding Streamlit relies on for its own
+   component spacing, so only the font and box model are set globally. */
+
+html, body, [class*="st-"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont,
+                 'Segoe UI', Roboto, sans-serif;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* ------------------------------------------------
    MAIN PAGE
 ------------------------------------------------ */
 

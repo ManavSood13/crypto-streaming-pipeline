@@ -1,3 +1,19 @@
+"""
+SQL analytics over the 10-second OHLCV table.
+
+Every aggregate is restricted to a trailing time window. Without one the
+dashboard re-scans the entire table on each refresh, so its cost grows
+with the age of the pipeline rather than with the data being displayed.
+"""
+
+# Trailing window used by the dashboard aggregates, in hours.
+DEFAULT_WINDOW_HOURS = 24
+
+
+def _window_clause(column="bucket_start"):
+    return f"{column} >= now() - make_interval(hours => %(hours)s)"
+
+
 def get_latest_prices(connection):
     """
     Return the latest OHLCV candle for each symbol.
@@ -17,105 +33,115 @@ def get_latest_prices(connection):
         return cursor.fetchall()
 
 
-def get_volume_by_symbol(connection):
+def get_volume_by_symbol(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
     Return total and average trading volume for each symbol.
     """
 
-    query = """
+    query = f"""
         SELECT
             symbol,
             SUM(volume) AS total_volume,
             AVG(volume) AS avg_volume_per_candle
         FROM ohlcv_10s
+        WHERE {_window_clause()}
         GROUP BY symbol
         ORDER BY total_volume DESC;
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, {"hours": window_hours})
         return cursor.fetchall()
 
 
-def get_price_change(connection):
+def get_price_change(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
-    Return price change between the first and latest candle
-    for each symbol.
+    Return the price change across the trailing window for each symbol.
+
+    The original version compared the first and last candle in the whole
+    table, which meant the figure silently became an all-time change and
+    cost a full scan plus two sorts on every dashboard refresh.
     """
 
-    query = """
-        WITH price_data AS (
+    query = f"""
+        WITH first_last AS (
             SELECT
                 symbol,
-                FIRST_VALUE(close) OVER (
-                    PARTITION BY symbol
-                    ORDER BY bucket_start
-                ) AS first_price,
-                FIRST_VALUE(close) OVER (
-                    PARTITION BY symbol
-                    ORDER BY bucket_start DESC
-                ) AS latest_price
+                (array_agg(close ORDER BY bucket_start ASC))[1]
+                    AS first_price,
+                (array_agg(close ORDER BY bucket_start DESC))[1]
+                    AS latest_price
             FROM ohlcv_10s
+            WHERE {_window_clause()}
+            GROUP BY symbol
         )
 
-        SELECT DISTINCT
+        SELECT
             symbol,
             first_price,
             latest_price,
             latest_price - first_price AS price_change,
-            ROUND(
-                ((latest_price - first_price) / first_price) * 100,
-                2
-            ) AS price_change_percent
-        FROM price_data
-        ORDER BY price_change_percent DESC;
+            CASE
+                WHEN first_price IS NULL OR first_price = 0 THEN NULL
+                ELSE ROUND(
+                    ((latest_price - first_price) / first_price) * 100,
+                    2
+                )
+            END AS price_change_percent
+        FROM first_last
+        ORDER BY price_change_percent DESC NULLS LAST;
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, {"hours": window_hours})
         return cursor.fetchall()
 
 
-def get_trading_activity(connection):
+def get_trading_activity(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
     Return trading activity metrics for each symbol.
     """
 
-    query = """
+    query = f"""
         SELECT
             symbol,
             SUM(trade_count) AS total_trades,
             ROUND(AVG(trade_count), 2) AS avg_trades_per_candle
         FROM ohlcv_10s
+        WHERE {_window_clause()}
         GROUP BY symbol
         ORDER BY total_trades DESC;
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, {"hours": window_hours})
         return cursor.fetchall()
 
 
-def get_volatility(connection):
+def get_volatility(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
     Return price range and percentage range for each symbol.
     """
 
-    query = """
+    query = f"""
         SELECT
             symbol,
             MAX(high) - MIN(low) AS price_range,
-            ROUND(
-                ((MAX(high) - MIN(low)) / MIN(low)) * 100,
-                2
-            ) AS price_range_percent
+            CASE
+                WHEN MIN(low) IS NULL OR MIN(low) = 0 THEN NULL
+                ELSE ROUND(
+                    ((MAX(high) - MIN(low)) / MIN(low)) * 100,
+                    2
+                )
+            END AS price_range_percent
         FROM ohlcv_10s
+        WHERE {_window_clause()}
         GROUP BY symbol
-        ORDER BY price_range_percent DESC;
+        ORDER BY price_range_percent DESC NULLS LAST;
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, {"hours": window_hours})
         return cursor.fetchall()
 
 
@@ -168,42 +194,43 @@ def get_total_candles(connection):
         return cursor.fetchone()[0]
 
 
-def get_price_change_by_symbol(connection):
-    """
-    Return price change percentage for each symbol.
-    """
-
-    query = """
-        SELECT
-            symbol,
-            ROUND(
-                ((MAX(close) - MIN(open)) / MIN(open)) * 100,
-                2
-            ) AS price_change_percent
-        FROM ohlcv_10s
-        GROUP BY symbol
-        ORDER BY price_change_percent DESC;
-    """
-
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        return cursor.fetchall()
-
-
-def get_hourly_volume(connection):
+def get_hourly_volume(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
     Return total trading volume by hour.
     """
 
-    query = """
+    query = f"""
         SELECT
             DATE_TRUNC('hour', bucket_start) AS hour,
             SUM(volume) AS total_volume
         FROM ohlcv_10s
+        WHERE {_window_clause()}
         GROUP BY hour
         ORDER BY hour;
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(query)
+        cursor.execute(query, {"hours": window_hours})
         return cursor.fetchall()
+
+
+def get_pipeline_health(connection):
+    """
+    Return (latest_bucket, candles_last_minute) for the status panel.
+
+    Used to report whether data is actually arriving rather than showing
+    a hard coded "active" indicator.
+    """
+
+    query = """
+        SELECT
+            MAX(bucket_start) AS latest_bucket,
+            COUNT(*) FILTER (
+                WHERE bucket_start >= now() - interval '1 minute'
+            ) AS candles_last_minute
+        FROM ohlcv_10s;
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(query)
+        return cursor.fetchone()

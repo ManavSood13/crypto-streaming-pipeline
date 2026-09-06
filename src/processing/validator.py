@@ -1,7 +1,17 @@
+from datetime import datetime
+
 from src.utils.logger import get_logger
 
 
 logger = get_logger("validator", "pipeline.log")
+
+
+REQUIRED_FIELDS = (
+    "symbol",
+    "price",
+    "quantity",
+    "trade_time",
+)
 
 
 def validate_trade(trade):
@@ -9,28 +19,25 @@ def validate_trade(trade):
     Validate a transformed trade.
     """
 
-    # Check required fields
-    required_fields = [
-        "symbol",
-        "price",
-        "quantity",
-        "trade_time",
-    ]
-
-    for field in required_fields:
-        if field not in trade or trade[field] is None:
+    for field in REQUIRED_FIELDS:
+        if trade.get(field) is None:
             logger.warning(
                 "Trade rejected: missing %s",
                 field
             )
             return False
 
-    # Validate symbol
     if not trade["symbol"]:
         logger.warning("Trade rejected: missing symbol")
         return False
 
-    # Validate price
+    if not isinstance(trade["trade_time"], datetime):
+        logger.warning(
+            "Trade rejected: invalid trade_time for %s",
+            trade["symbol"]
+        )
+        return False
+
     if trade["price"] <= 0:
         logger.warning(
             "Trade rejected: invalid price for %s",
@@ -38,7 +45,6 @@ def validate_trade(trade):
         )
         return False
 
-    # Validate quantity
     if trade["quantity"] <= 0:
         logger.warning(
             "Trade rejected: invalid quantity for %s",
