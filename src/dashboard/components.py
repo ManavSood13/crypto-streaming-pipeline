@@ -14,7 +14,7 @@ from src.dashboard.price import (
 
 from src.dashboard.analytics import (
     render_market_analytics,
-    render_hourly_volume
+    render_volume_over_time
 )
 
 from src.dashboard.status import (
@@ -67,8 +67,8 @@ def render_dashboard(data):
         data["volatility_df"]
     )
 
-    render_hourly_volume(
-        data["hourly_volume_df"]
+    render_volume_over_time(
+        data["volume_over_time_df"]
     )
 
     render_pipeline_status(

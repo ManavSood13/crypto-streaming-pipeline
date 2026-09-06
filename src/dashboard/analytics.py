@@ -5,7 +5,7 @@ from src.dashboard.charts import (
     create_performance_chart,
     create_activity_chart,
     create_volatility_chart,
-    create_hourly_volume_chart
+    create_volume_over_time_chart
 )
 
 
@@ -75,19 +75,19 @@ def render_market_analytics(
         )
 
 
-def render_hourly_volume(
-    hourly_volume_df
+def render_volume_over_time(
+    volume_over_time_df
 ):
 
     st.subheader(
         "Trading Volume Over Time"
     )
 
-    hourly_fig = create_hourly_volume_chart(
-        hourly_volume_df
-    )
+    if volume_over_time_df is None or volume_over_time_df.empty:
+        st.info("No volume data yet. Start the ingestion pipeline.")
+        return
 
     st.plotly_chart(
-        hourly_fig,
+        create_volume_over_time_chart(volume_over_time_df),
         width="stretch"
     )

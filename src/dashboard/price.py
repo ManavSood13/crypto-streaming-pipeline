@@ -4,6 +4,7 @@ import streamlit as st
 
 from src.dashboard.data import get_price_history_data
 from src.dashboard.safe import lookup, money, percent
+from src.dashboard.theme import direction_color, direction_fill
 
 
 def add_data_gaps(history_df, bucket_seconds=10):
@@ -154,6 +155,17 @@ def render_price_analysis(
         history_df
     )
 
+    # Colour the series by its net move across the visible window.
+    closes = history_df["close"].dropna()
+
+    net_change = (
+        closes.iloc[-1] - closes.iloc[0]
+        if len(closes) >= 2
+        else None
+    )
+
+    line_colour = direction_color(net_change)
+
     figure = go.Figure()
 
     figure.add_trace(
@@ -162,9 +174,27 @@ def render_price_analysis(
             y=history_df["close"],
             mode="lines",
             name=selected_symbol,
-            connectgaps=False
+            connectgaps=False,
+            line=dict(
+                color=line_colour,
+                width=2
+            ),
+            fill="tozeroy",
+            fillcolor=direction_fill(net_change)
         )
     )
+
+    # The fill is only a backdrop for the line, so keep the y axis
+    # framed on the prices rather than stretching it down to zero.
+    if not closes.empty:
+        padding = max(
+            (closes.max() - closes.min()) * 0.1,
+            closes.max() * 0.0005
+        )
+
+        figure.update_yaxes(
+            range=[closes.min() - padding, closes.max() + padding]
+        )
 
     figure.update_layout(
         xaxis_title="Time",

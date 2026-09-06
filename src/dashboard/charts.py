@@ -1,5 +1,7 @@
 import plotly.express as px
 
+from src.dashboard.theme import direction_colors
+
 
 def create_volume_chart(
     volume_df
@@ -46,6 +48,13 @@ def create_performance_chart(
         y="symbol",
         orientation="h",
         title="Price Performance"
+    )
+
+    # Green for gainers, red for losers.
+    figure.update_traces(
+        marker_color=direction_colors(
+            chart_df["price_change_percent"]
+        )
     )
 
     figure.update_layout(
@@ -125,18 +134,26 @@ def create_volatility_chart(
     return figure
 
 
-def create_hourly_volume_chart(
-    hourly_volume_df
+def create_volume_over_time_chart(
+    volume_over_time_df
 ):
+    """
+    Line chart of traded volume over time.
+
+    Markers are always drawn: with a short history the series can hold a
+    single point, and a line alone renders nothing at all.
+    """
+
     figure = px.line(
-        hourly_volume_df,
-        x="hour",
+        volume_over_time_df,
+        x="bucket_time",
         y="total_volume",
-        title="Hourly Trading Volume"
+        title="Trading Volume Over Time",
+        markers=True
     )
 
     figure.update_layout(
-        xaxis_title="Hour",
+        xaxis_title="Time",
         yaxis_title="Total Volume",
         height=420,
         margin=dict(

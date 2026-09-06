@@ -132,7 +132,7 @@ The project includes SQL queries for:
 - Price volatility
 - Historical price data
 - Total number of stored candles
-- Hourly trading volume
+- Trading volume over time
 
 ### Pandas Analysis
 
@@ -160,7 +160,7 @@ The Streamlit dashboard provides:
 - Price performance chart
 - Trading activity chart
 - Price volatility chart
-- Hourly trading volume chart
+- Trading volume over time chart
 - Pipeline status section
 
 ---
@@ -375,7 +375,7 @@ Total volume
 Price change
 Trading activity
 Volatility
-Hourly volume
+Volume over time
 ```
 
 ---
@@ -736,9 +736,13 @@ Compares the total number of trades represented by the stored OHLCV candles.
 
 Displays the observed price range for each cryptocurrency.
 
-### Hourly Trading Volume
+### Trading Volume Over Time
 
 Shows aggregated trading volume over time.
+
+The bucket width adapts to how much history exists (1 minute, 5 minutes,
+15 minutes or 1 hour), so the chart is readable immediately after the
+pipeline starts rather than collapsing into a single point.
 
 ---
 

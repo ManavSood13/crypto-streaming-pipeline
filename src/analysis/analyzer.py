@@ -89,13 +89,13 @@ def price_history_dataframe(results):
 
     return pd.DataFrame(results, columns=columns)
 
-def hourly_volume_dataframe(results):
+def volume_over_time_dataframe(results):
     """
-    Convert hourly volume results into a Pandas DataFrame.
+    Convert volume-over-time results into a Pandas DataFrame.
     """
 
     columns = [
-        "hour",
+        "bucket_time",
         "total_volume"
     ]
 

@@ -194,19 +194,51 @@ def get_total_candles(connection):
         return cursor.fetchone()[0]
 
 
-def get_hourly_volume(connection, window_hours=DEFAULT_WINDOW_HOURS):
+def get_volume_over_time(connection, window_hours=DEFAULT_WINDOW_HOURS):
     """
-    Return total trading volume by hour.
+    Return total trading volume bucketed over the trailing window.
+
+    The bucket width adapts to how much history actually exists. Fixed
+    hourly buckets collapsed a freshly started pipeline into a single
+    point, which a line chart cannot draw.
     """
 
     query = f"""
+        WITH bounds AS (
+            SELECT
+                MIN(bucket_start) AS first_seen,
+                MAX(bucket_start) AS last_seen
+            FROM ohlcv_10s
+            WHERE {_window_clause()}
+        ),
+
+        step AS (
+            SELECT
+                first_seen,
+                CASE
+                    WHEN last_seen - first_seen <= interval '30 minutes'
+                        THEN interval '1 minute'
+                    WHEN last_seen - first_seen <= interval '3 hours'
+                        THEN interval '5 minutes'
+                    WHEN last_seen - first_seen <= interval '12 hours'
+                        THEN interval '15 minutes'
+                    ELSE interval '1 hour'
+                END AS width
+            FROM bounds
+            WHERE first_seen IS NOT NULL
+        )
+
         SELECT
-            DATE_TRUNC('hour', bucket_start) AS hour,
-            SUM(volume) AS total_volume
-        FROM ohlcv_10s
-        WHERE {_window_clause()}
-        GROUP BY hour
-        ORDER BY hour;
+            date_bin(
+                step.width,
+                ohlcv_10s.bucket_start,
+                step.first_seen
+            ) AS bucket_time,
+            SUM(ohlcv_10s.volume) AS total_volume
+        FROM ohlcv_10s, step
+        WHERE {_window_clause("ohlcv_10s.bucket_start")}
+        GROUP BY bucket_time
+        ORDER BY bucket_time;
     """
 
     with connection.cursor() as cursor:

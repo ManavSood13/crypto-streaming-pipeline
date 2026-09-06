@@ -10,7 +10,7 @@ from src.analytics.queries import (
     get_price_change,
     get_trading_activity,
     get_volatility,
-    get_hourly_volume,
+    get_volume_over_time,
     get_pipeline_health,
 )
 
@@ -20,7 +20,7 @@ from src.analysis.analyzer import (
     price_change_dataframe,
     trading_activity_dataframe,
     volatility_dataframe,
-    hourly_volume_dataframe,
+    volume_over_time_dataframe,
     price_history_dataframe,
 )
 
@@ -87,9 +87,9 @@ def get_dashboard_data():
                 get_volatility(connection)
             )
         ),
-        "hourly_volume_df": to_float(
-            hourly_volume_dataframe(
-                get_hourly_volume(connection)
+        "volume_over_time_df": to_float(
+            volume_over_time_dataframe(
+                get_volume_over_time(connection)
             )
         ),
         "total_candles": get_total_candles(connection),

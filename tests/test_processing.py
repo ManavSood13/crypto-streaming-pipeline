@@ -144,3 +144,33 @@ def test_to_float_converts_decimal_columns():
 
     converted = to_float(frame)
     assert converted["close"].dtype == "float64"
+
+
+# -----------------------------
+# Volume-over-time chart
+# -----------------------------
+
+def test_volume_chart_always_draws_markers():
+    """A single bucket must still be visible; a bare line draws nothing."""
+
+    from src.dashboard.charts import create_volume_over_time_chart
+
+    frame = pd.DataFrame(
+        [{
+            "bucket_time": datetime(2026, 1, 1, tzinfo=timezone.utc),
+            "total_volume": 5.0,
+        }]
+    )
+
+    figure = create_volume_over_time_chart(frame)
+
+    assert "markers" in figure.data[0].mode
+    assert len(figure.data[0].x) == 1
+
+
+def test_volume_chart_handles_empty_frame():
+    from src.dashboard.charts import create_volume_over_time_chart
+
+    frame = pd.DataFrame([], columns=["bucket_time", "total_volume"])
+
+    assert create_volume_over_time_chart(frame) is not None
