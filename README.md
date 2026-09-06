@@ -213,6 +213,9 @@ crypto-streaming-pipeline/
 ├── logs/
 │   └── .gitkeep
 │
+├── sql/
+│   └── schema.sql
+│
 ├── src/
 │   ├── __init__.py
 │   │
@@ -220,14 +223,23 @@ crypto-streaming-pipeline/
 │   │   └── binance_rest.py
 │   │
 │   ├── analytics/
-│   │   └── queries.py
+│   │   └── queries.py            # SQL aggregates
 │   │
 │   ├── analysis/
-│   │   ├── analyzer.py
-│   │   └── test_analyzer.py
+│   │   └── analyzer.py           # query results -> DataFrames
+│   │
+│   ├── dashboard/
+│   │   ├── components.py         # page assembly
+│   │   ├── data.py               # cached connection + data loading
+│   │   ├── overview.py           # KPIs and market table
+│   │   ├── price.py              # price history chart
+│   │   ├── analytics.py          # analytics section
+│   │   ├── charts.py             # Plotly figures
+│   │   ├── status.py             # live pipeline health
+│   │   ├── safe.py               # empty-data helpers
+│   │   └── theme.py              # shared chart colours
 │   │
 │   ├── database/
-│   │   ├── __init__.py
 │   │   ├── connection.py
 │   │   └── repository.py
 │   │
@@ -235,17 +247,22 @@ crypto-streaming-pipeline/
 │   │   └── binance_websocket.py
 │   │
 │   ├── processing/
-│   │   ├── __init__.py
 │   │   ├── transformer.py
 │   │   ├── validator.py
 │   │   └── aggregator.py
 │   │
 │   └── utils/
-│       ├── __init__.py
 │       └── logger.py
 │
+├── tests/
+│   ├── test_aggregator.py
+│   ├── test_processing.py
+│   └── test_theme.py
+│
+├── .env.example
 ├── .gitignore
 ├── app.py
+├── pytest.ini
 ├── README.md
 └── requirements.txt
 ```

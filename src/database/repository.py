@@ -30,14 +30,6 @@ INSERT_OHLCV = """
 """
 
 
-def insert_ohlcv(connection, record):
-    """
-    Insert a single 10-second OHLCV record into PostgreSQL.
-    """
-
-    return insert_ohlcv_many(connection, [record])
-
-
 def insert_ohlcv_many(connection, records):
     """
     Insert several OHLCV records in one transaction.

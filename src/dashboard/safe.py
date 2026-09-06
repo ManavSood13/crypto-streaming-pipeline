@@ -115,14 +115,3 @@ def percent(value):
         return None
 
     return f"{value:+.2f}%"
-
-
-def has_data(*frames):
-    """
-    True only if every frame contains at least one row.
-    """
-
-    return all(
-        frame is not None and not frame.empty
-        for frame in frames
-    )
