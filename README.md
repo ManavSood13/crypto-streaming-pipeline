@@ -646,6 +646,54 @@ This prevents the application from continuously attempting connections with no d
 
 ---
 
+## 🚀 Deployment
+
+The pipeline is **two processes**, and that shapes how it deploys:
+
+| Process | What it does | Needs |
+|---|---|---|
+| `src.ingestion.binance_websocket` | Holds a WebSocket open, writes candles | An always-on worker |
+| `app.py` (Streamlit) | Reads the database and renders | A web host |
+
+A Streamlit host runs only the second one. Deploying the dashboard alone
+produces a working page with an empty database, so the ingestion worker
+must be hosted separately.
+
+### Components
+
+1. **Database** — any managed PostgreSQL. Apply `sql/schema.sql` once,
+   then set `DATABASE_URL` to the connection string. Prefer a provider
+   that is always on rather than one metering compute hours, because the
+   dashboard polls continuously.
+
+2. **Ingestion worker** — deploy the included `Dockerfile` to any host
+   that runs a long-lived process, with `DATABASE_URL` set.
+
+   Binance geo-restricts its API, so pick a region outside the United
+   States or the WebSocket will be refused.
+
+3. **Dashboard** — Streamlit Community Cloud deploys `app.py` from a
+   GitHub repository. Add `DATABASE_URL` under *Advanced settings →
+   Secrets*, and set `REFRESH_INTERVAL` to something like `15s` to keep
+   database usage down.
+
+### Configuration
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Full connection string; overrides the `PG*` variables |
+| `PGSSLMODE` | Set to `require` for managed databases |
+| `REFRESH_INTERVAL` | Dashboard refresh, e.g. `3s` locally, `15s` hosted |
+| `LOG_LEVEL` | `INFO` by default |
+
+### Verifying a deployment
+
+The dashboard's own status panel is the check: **Ingestion** shows
+`🟢 Live` with a candle count per minute when the worker is connected,
+and `🔴 Stale` or `🔴 No data` when it is not.
+
+---
+
 ## 📝 Logging
 
 The project uses Python's built-in `logging` module.

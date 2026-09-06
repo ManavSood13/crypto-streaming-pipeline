@@ -8,8 +8,13 @@ from src.utils.logger import get_logger
 logger = get_logger("database", "pipeline.log")
 
 
-# Configuration is environment driven so the project runs on any
-# machine. The defaults preserve the original local setup.
+# Hosted providers (Neon, Supabase, Railway) hand out a single
+# connection string, so that takes precedence when present.
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+# Otherwise the standard PostgreSQL variables are used. The defaults
+# preserve the original local setup.
 DB_CONFIG = {
     "dbname": os.getenv("PGDATABASE", "crypto_pipeline"),
     "user": os.getenv("PGUSER", os.getenv("USER", "postgres")),
@@ -24,18 +29,44 @@ if _password:
     DB_CONFIG["password"] = _password
 
 
+# Managed databases require TLS; local sockets usually do not.
+_sslmode = os.getenv("PGSSLMODE")
+
+if _sslmode:
+    DB_CONFIG["sslmode"] = _sslmode
+
+
+def describe_target():
+    """
+    Describe the connection target without exposing credentials.
+    """
+
+    if DATABASE_URL:
+        host = DATABASE_URL.split("@")[-1].split("/")[0]
+        return f"{host} (from DATABASE_URL)"
+
+    return f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
+
+
 def get_connection():
     """
     Create and return a PostgreSQL database connection.
     """
 
     try:
-        connection = psycopg.connect(**DB_CONFIG)
+        connection = (
+            psycopg.connect(DATABASE_URL)
+            if DATABASE_URL
+            else psycopg.connect(**DB_CONFIG)
+        )
         logger.debug("PostgreSQL connection established")
         return connection
 
     except Exception:
-        logger.exception("Failed to connect to PostgreSQL")
+        logger.exception(
+            "Failed to connect to PostgreSQL at %s",
+            describe_target()
+        )
         raise
 
 
